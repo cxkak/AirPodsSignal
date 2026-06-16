@@ -48,10 +48,9 @@ class BleBroadcaster(private val bluetoothAdapter: BluetoothAdapter) {
             results.add("✅ 支持 BLE 外设广播模式")
         }
         results.add("\n📡 广播帧 (ADV_IND):")
-        results.add("   Flags: LE Limited Discoverable")
         results.add("   Apple: 4C 00 07 19 01 5C 58 4C")
-        results.add("   设备名: AirPods Pro (广播+扫描回应)")
-        results.add("   模式: 可连接 + 高功率")
+        results.add("   设备名: AirPods Pro")
+        results.add("   模式: ADV_IND + SCAN_RSP")
         return results
     }
 
@@ -67,39 +66,39 @@ class BleBroadcaster(private val bluetoothAdapter: BluetoothAdapter) {
             bluetoothAdapter.name = "AirPods Pro"
         } catch (_: Exception) {}
 
-        // ★ AirPods Pro 完整配对帧
-        // iOS 需要看到：
-        // 1. Apple 公司 ID 0x004C + Setup Type 0x07 ✅
-        // 2. 设备名 "AirPods Pro" 在 ADV_IND 中 ← 之前漏了
-        // 3. 可连接广播 (ADV_IND) ← 之前是 NONCONN
+        // ★ 完整 AirPods Pro 广播数据
+        // FF 4C 00 07 19 01 5C 58 4C 00 00 0A 05 01 02 03 04
         val manufacturerData = byteArrayOf(
-            0x07,             // Setup Type — 弹窗触发器
-            0x19, 0x01,       // 设备能力 (ANC + 自适应)
-            0x5C, 0x58, 0x4C  // 电量: 左92% 右88% 盒76%
+            0x07,             // Setup Type — 弹窗触发
+            0x19, 0x01,       // 设备能力 (ANC + 自适应模式)
+            0x5C, 0x58, 0x4C, // 电量: 左耳92% 右耳88% 充电盒76%
+            0x00, 0x00,       // 保留字段
+            0x0A, 0x05,       // 固件版本信息
+            0x01, 0x02, 0x03, 0x04  // 设备序列号标识
         )
 
-        // ★ 广播数据：包含设备名！
+        // 广播数据包
         val advertiseData = AdvertiseData.Builder()
             .addManufacturerData(0x004C, manufacturerData)
-            .setIncludeDeviceName(true)      // ★ 关键：设备名在广播包中
+            .setIncludeDeviceName(true)
             .build()
 
-        // ★ 扫描回应包也包含设备名
+        // 扫描回应包
         val scanResponse = AdvertiseData.Builder()
             .setIncludeDeviceName(true)
             .build()
 
-        // ★ 可连接广播 (ADV_IND) — 和真实 AirPods 一致
+        // 广播参数
         val settings = AdvertiseSettings.Builder()
             .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
             .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
-            .setConnectable(true)             // ★ 关键：可连接！
+            .setConnectable(true)
             .build()
 
         try {
             advertiser?.startAdvertising(settings, advertiseData, scanResponse, callback)
             isAdvertising = true
-            lastResult = "📡 信号已发射 (ADV_IND+名称)"
+            lastResult = "📡 信号已发射"
             return lastResult
         } catch (e: SecurityException) {
             lastResult = "❌ 缺少蓝牙广播权限"
