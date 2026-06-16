@@ -3,7 +3,7 @@ name: Build APK
 on:
   push:
     branches: [ "main" ]
-  workflow_dispatch:    # 允许手动触发
+  workflow_dispatch:
 
 jobs:
   build:
@@ -17,8 +17,11 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Set up Android SDK
+        run: |
+          echo "y" | sudo ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0"
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
@@ -26,7 +29,9 @@ jobs:
           gradle-version: '8.5'
 
       - name: Build APK
-        run: gradle assembleDebug
+        run: gradle assembleDebug --no-daemon
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
