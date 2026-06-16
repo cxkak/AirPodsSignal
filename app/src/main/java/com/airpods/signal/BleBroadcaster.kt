@@ -7,149 +7,114 @@ import android.util.Log
 
 class BleBroadcaster(private val bluetoothAdapter: BluetoothAdapter) {
 
-    private var advertiserMain: BluetoothLeAdvertiser? = null
-    private var advertiserExtra: BluetoothLeAdvertiser? = null
+    private var advertiser: BluetoothLeAdvertiser? = null
     var isAdvertising = false
         private set
 
     var lastResult = ""
         private set
 
-    private val callbackMain = object : AdvertiseCallback() {
+    private val callback = object : AdvertiseCallback() {
         override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
-            Log.d("BleBroadcaster", "主广播启动成功")
+            isAdvertising = true
+            Log.d("BleBroadcaster", "广播启动成功")
         }
 
         override fun onStartFailure(errorCode: Int) {
-            Log.e("BleBroadcaster", "主广播失败: $errorCode")
+            isAdvertising = false
+            val errorMsg = when (errorCode) {
+                ADVERTISE_FAILED_ALREADY_STARTED -> "已经在广播"
+                ADVERTISE_FAILED_DATA_TOO_LARGE -> "广播数据过大"
+                ADVERTISE_FAILED_FEATURE_UNSUPPORTED -> "设备不支持此功能"
+                ADVERTISE_FAILED_INTERNAL_ERROR -> "内部错误"
+                ADVERTISE_FAILED_TOO_MANY_ADVERTISERS -> "广播者过多"
+                else -> "未知错误($errorCode)"
+            }
+            Log.e("BleBroadcaster", "广播启动失败: $errorMsg")
         }
     }
 
-    private val callbackExtra = object : AdvertiseCallback() {
-        override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
-            Log.d("BleBroadcaster", "辅广播启动成功")
-        }
-
-        override fun onStartFailure(errorCode: Int) {
-            Log.e("BleBroadcaster", "辅广播失败: $errorCode")
-        }
-    }
-
-    /**
-     * 自检：检查设备是否满足广播条件
-     */
     fun selfCheck(): List<String> {
         val results = mutableListOf<String>()
-
-        // 1. 检查蓝牙是否开启
         if (!bluetoothAdapter.isEnabled) {
             results.add("❌ 蓝牙未开启")
         } else {
             results.add("✅ 蓝牙已开启")
         }
-
-        // 2. 检查 BLE 外设模式
         val leAdvertiser = bluetoothAdapter.bluetoothLeAdvertiser
         if (leAdvertiser == null) {
             results.add("❌ 不支持 BLE 外设广播模式")
         } else {
             results.add("✅ 支持 BLE 外设广播模式")
         }
-
-        // 3. 检查多重广播支持 (LE Extended Advertising)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            results.add("✅ 支持多重广播 (Android 8+)")
-        } else {
-            results.add("⚠️ 不支持多重广播 (Android < 8)")
-        }
-
-        // 4. 检查权限
-        results.add("ℹ️ 具体弹窗效果取决于接收端 iOS 设备")
-
+        results.add("\n📡 广播帧 (ADV_IND):")
+        results.add("   Flags: LE Limited Discoverable")
+        results.add("   Apple: 4C 00 07 19 01 5C 58 4C")
+        results.add("   设备名: AirPods Pro (广播+扫描回应)")
+        results.add("   模式: 可连接 + 高功率")
         return results
     }
 
     fun start(): String {
         lastResult = ""
-
-        advertiserMain = bluetoothAdapter.bluetoothLeAdvertiser
+        advertiser = bluetoothAdapter.bluetoothLeAdvertiser
             ?: run {
                 lastResult = "❌ 设备不支持 BLE 广播"
                 return lastResult
             }
 
-        // 保存原来的名称
         try {
             bluetoothAdapter.name = "AirPods Pro"
         } catch (_: Exception) {}
 
-        // ★ 广播包：AirPods Pro 配对帧
-        // FF 4C 00 07 19 01 5C 58 4C
+        // ★ AirPods Pro 完整配对帧
+        // iOS 需要看到：
+        // 1. Apple 公司 ID 0x004C + Setup Type 0x07 ✅
+        // 2. 设备名 "AirPods Pro" 在 ADV_IND 中 ← 之前漏了
+        // 3. 可连接广播 (ADV_IND) ← 之前是 NONCONN
         val manufacturerData = byteArrayOf(
             0x07,             // Setup Type — 弹窗触发器
-            0x19, 0x01,       // 设备能力 (ANC)
-            0x5C, 0x58, 0x4C  // 电量
+            0x19, 0x01,       // 设备能力 (ANC + 自适应)
+            0x5C, 0x58, 0x4C  // 电量: 左92% 右88% 盒76%
         )
 
-        // ===== 主广播 (ADV_NONCONN_IND) =====
+        // ★ 广播数据：包含设备名！
         val advertiseData = AdvertiseData.Builder()
             .addManufacturerData(0x004C, manufacturerData)
-            .setIncludeDeviceName(false)
+            .setIncludeDeviceName(true)      // ★ 关键：设备名在广播包中
             .build()
 
+        // ★ 扫描回应包也包含设备名
         val scanResponse = AdvertiseData.Builder()
             .setIncludeDeviceName(true)
             .build()
 
+        // ★ 可连接广播 (ADV_IND) — 和真实 AirPods 一致
         val settings = AdvertiseSettings.Builder()
-            .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)  // 最快频率 ~100ms
-            .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)     // 最大功率
-            .setConnectable(false)
+            .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
+            .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
+            .setConnectable(true)             // ★ 关键：可连接！
             .build()
 
         try {
-            advertiserMain?.startAdvertising(settings, advertiseData, scanResponse, callbackMain)
-            lastResult = "📡 主广播已启动"
-        } catch (e: Exception) {
-            lastResult = "❌ 主广播失败: ${e.localizedMessage}"
+            advertiser?.startAdvertising(settings, advertiseData, scanResponse, callback)
+            isAdvertising = true
+            lastResult = "📡 信号已发射 (ADV_IND+名称)"
             return lastResult
+        } catch (e: SecurityException) {
+            lastResult = "❌ 缺少蓝牙广播权限"
+        } catch (e: Exception) {
+            lastResult = "❌ 广播失败: ${e.localizedMessage}"
         }
 
-        // ===== 辅广播 (第二个通道，提高频率) =====
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            try {
-                val extraAdData = AdvertiseData.Builder()
-                    .addManufacturerData(0x004C, manufacturerData)
-                    .setIncludeDeviceName(false)
-                    .build()
-
-                val extraSettings = AdvertiseSettings.Builder()
-                    .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
-                    .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
-                    .setConnectable(false)
-                    .build()
-
-                advertiserExtra = bluetoothAdapter.bluetoothLeAdvertiser
-                advertiserExtra?.startAdvertising(extraSettings, extraAdData, null, callbackExtra)
-                lastResult += " + 辅广播"
-            } catch (e: Exception) {
-                Log.w("BleBroadcaster", "辅广播不可用: ${e.localizedMessage}")
-            }
-        }
-
-        isAdvertising = true
-        return "📡 信号已发射 (双重广播)"
+        return lastResult
     }
 
     fun stop(): String {
         try {
-            advertiserMain?.stopAdvertising(callbackMain)
+            advertiser?.stopAdvertising(callback)
         } catch (_: Exception) {}
-        try {
-            advertiserExtra?.stopAdvertising(callbackExtra)
-        } catch (_: Exception) {}
-        advertiserMain = null
-        advertiserExtra = null
+        advertiser = null
         isAdvertising = false
         try {
             bluetoothAdapter.name = "AirPods Pro"
