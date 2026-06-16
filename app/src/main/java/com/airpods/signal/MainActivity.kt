@@ -16,9 +16,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var broadcaster: BleBroadcaster
     private lateinit var btnToggle: MaterialButton
     private lateinit var btnCheck: MaterialButton
-    private lateinit var btnDetect: MaterialButton
     private lateinit var txtStatus: MaterialTextView
-    private lateinit var txtPacket: MaterialTextView
     private lateinit var txtCheck: MaterialTextView
 
     private val permissionLauncher = registerForActivityResult(
@@ -29,7 +27,6 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "权限已授予", Toast.LENGTH_SHORT).show()
             btnToggle.isEnabled = true
             btnCheck.isEnabled = true
-            btnDetect.isEnabled = true
         } else {
             Toast.makeText(this, "需要蓝牙权限才能广播", Toast.LENGTH_LONG).show()
         }
@@ -41,9 +38,7 @@ class MainActivity : AppCompatActivity() {
 
         btnToggle = findViewById(R.id.btn_toggle)
         btnCheck = findViewById(R.id.btn_check)
-        btnDetect = findViewById(R.id.btn_detect)
         txtStatus = findViewById(R.id.txt_status)
-        txtPacket = findViewById(R.id.txt_packet)
         txtCheck = findViewById(R.id.txt_check)
 
         val bluetoothManager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
@@ -52,12 +47,9 @@ class MainActivity : AppCompatActivity() {
             txtStatus.text = "❌ 设备不支持蓝牙"
             btnToggle.isEnabled = false
             btnCheck.isEnabled = false
-            btnDetect.isEnabled = false
             return
         }
         broadcaster = BleBroadcaster(adapter)
-
-        showPacketFormat()
 
         btnToggle.setOnClickListener {
             if (!adapter.isEnabled) {
@@ -71,14 +63,6 @@ class MainActivity : AppCompatActivity() {
             val results = broadcaster.selfCheck()
             txtCheck.text = results.joinToString("\n")
             Toast.makeText(this, "自检完成", Toast.LENGTH_SHORT).show()
-        }
-
-        btnDetect.setOnClickListener {
-            val info = broadcaster.getDetectedInfo()
-            txtCheck.text = info
-            if (info.contains("尚未检测到")) {
-                Toast.makeText(this, "未检测到广播，用另一台设备扫描试试", Toast.LENGTH_LONG).show()
-            }
         }
 
         requestPermissions()
@@ -100,20 +84,6 @@ class MainActivity : AppCompatActivity() {
                 txtStatus.text = broadcaster.lastResult
             }
         }
-    }
-
-    private fun showPacketFormat() {
-        txtPacket.text = """
-            模拟 AirPods Pro BLE 广播
-            ─────────────────────
-            厂商: Apple (0x004C)
-            类型: Setup 0x07 (配对)
-            名称: AirPods Pro
-            模式: ADV_IND 可连接
-            频率: 最低延迟 | 功率: 最大
-            
-            ℹ️ 点「检测广播」查看实际帧
-        """.trimIndent()
     }
 
     private fun requestPermissions() {
@@ -141,6 +111,5 @@ class MainActivity : AppCompatActivity() {
         }
         btnToggle.isEnabled = true
         btnCheck.isEnabled = true
-        btnDetect.isEnabled = true
     }
 }
