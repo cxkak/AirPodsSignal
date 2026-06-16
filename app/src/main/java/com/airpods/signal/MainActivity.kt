@@ -15,10 +15,11 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var broadcaster: BleBroadcaster
     private lateinit var btnToggle: MaterialButton
+    private lateinit var btnCheck: MaterialButton
     private lateinit var txtStatus: MaterialTextView
     private lateinit var txtPacket: MaterialTextView
+    private lateinit var txtCheck: MaterialTextView
 
-    // Android 12+ 权限请求
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -26,6 +27,7 @@ class MainActivity : AppCompatActivity() {
         if (allGranted) {
             Toast.makeText(this, "权限已授予", Toast.LENGTH_SHORT).show()
             btnToggle.isEnabled = true
+            btnCheck.isEnabled = true
         } else {
             Toast.makeText(this, "需要蓝牙权限才能广播", Toast.LENGTH_LONG).show()
         }
@@ -36,23 +38,23 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         btnToggle = findViewById(R.id.btn_toggle)
+        btnCheck = findViewById(R.id.btn_check)
         txtStatus = findViewById(R.id.txt_status)
         txtPacket = findViewById(R.id.txt_packet)
+        txtCheck = findViewById(R.id.txt_check)
 
-        // 初始化蓝牙
         val bluetoothManager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
         val adapter = bluetoothManager.adapter
         if (adapter == null) {
             txtStatus.text = "❌ 设备不支持蓝牙"
             btnToggle.isEnabled = false
+            btnCheck.isEnabled = false
             return
         }
         broadcaster = BleBroadcaster(adapter)
 
-        // 显示广播包结构
         showPacketFormat()
 
-        // 按钮点击
         btnToggle.setOnClickListener {
             if (!adapter.isEnabled) {
                 Toast.makeText(this, "请先开启蓝牙", Toast.LENGTH_SHORT).show()
@@ -61,7 +63,12 @@ class MainActivity : AppCompatActivity() {
             toggleBroadcast()
         }
 
-        // 请求权限
+        btnCheck.setOnClickListener {
+            val results = broadcaster.selfCheck()
+            txtCheck.text = results.joinToString("\n")
+            Toast.makeText(this, "自检完成", Toast.LENGTH_SHORT).show()
+        }
+
         requestPermissions()
     }
 
@@ -77,25 +84,27 @@ class MainActivity : AppCompatActivity() {
             if (broadcaster.isAdvertising) {
                 btnToggle.text = "停止广播"
                 btnToggle.icon = ContextCompat.getDrawable(this, R.drawable.ic_stop)
+            } else {
+                // 启动失败，显示详细错误
+                txtStatus.text = broadcaster.lastResult
             }
         }
     }
 
     private fun showPacketFormat() {
         txtPacket.text = """
-            BLE 广播包:
-            02 01 06           ← Flags
-            FF 4C 00           ← Apple Inc. (0x004C)
-               07              ← ★ Setup Type (弹窗关键)
-               19 01           ← Device Capabilities
-               5C 58 4C        ← Battery L/R/Case
-            0B 09              ← "AirPods Pro"
+            BLE 广播帧 (双重广播):
+            FF 4C 00 07 19 01 5C 58 4C
+            └── 苹果公司ID 0x004C
+                └── Setup Type 0x07 (弹窗触发)
+                    └── 设备能力 0x0119
+                        └── 电量 L=92% R=88% C=76%
+            频率: ~100ms | 功率: 最大
         """.trimIndent()
     }
 
     private fun requestPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // Android 12+: 需要 BLUETOOTH_ADVERTISE
             val permissions = arrayOf(
                 android.Manifest.permission.BLUETOOTH_ADVERTISE,
                 android.Manifest.permission.BLUETOOTH_SCAN,
@@ -109,7 +118,6 @@ class MainActivity : AppCompatActivity() {
                 return
             }
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            // Android 6-11: 需要位置权限
             if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED) {
                 permissionLauncher.launch(
@@ -119,5 +127,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
         btnToggle.isEnabled = true
+        btnCheck.isEnabled = true
     }
 }
