@@ -9,13 +9,16 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-      - uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: 8.5
-      - name: Build APK
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+      - name: Build debug APK
         run: |
-          echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
-          ls /usr/local/lib/android/sdk/platforms/  # 看看有啥
+          # GitHub runner pre-installed Android SDK
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          # 列出 platforms
+          echo "Available platforms:"
+          ls $ANDROID_HOME/platforms/ 2>/dev/null || echo "No platforms dir"
+          # 用 gradle 命令而不是 gradlew
           gradle assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
