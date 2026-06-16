@@ -47,6 +47,7 @@
         android:padding="14dp"
         android:minHeight="100dp"
         android:background="#1A1A24"
+        />
 
     <Space
         android:layout_width="1dp"
