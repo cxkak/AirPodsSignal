@@ -1,40 +1,23 @@
 name: Build APK
-
-on:
-  push:
-    branches: [ "main" ]
-  workflow_dispatch:
-
+on: [push, workflow_dispatch]
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-
-      - name: Setup Android SDK
-        run: |
-          echo "y" | sudo $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0"
-        env:
-          ANDROID_HOME: /usr/local/lib/android/sdk
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+      - uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.5
-
       - name: Build APK
         run: |
           echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
+          ls /usr/local/lib/android/sdk/platforms/  # 看看有啥
           gradle assembleDebug --no-daemon
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: 模拟信号
           path: app/build/outputs/apk/debug/app-debug.apk
